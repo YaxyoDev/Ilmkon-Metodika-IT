@@ -166,3 +166,32 @@ class JournalEntry(Base):
     attendance: Mapped[str] = mapped_column(
         String, default="keldi", nullable=False
     )  # "keldi" | "kelmadi" | "kechikdi"
+
+
+class PointsEvent(Base):
+    """Ball tarixi — har bir ball o'zgarishi log qilinadi (gamifikatsiya 1-band).
+
+    `seq` — avtoinkrement, kiritish tartibini beradi (timeline "so'nggi yutuqlar"
+    uchun). Tashqi `id` maydoni javobda "pe-{seq}" ko'rinishida chiqadi.
+
+    Jurnal manbasi (`source="journal"`): har (student, date) juftligi uchun BITTA
+    event bo'ladi — katak qayta yozilganda yangilanadi, ball 0 bo'lsa o'chiriladi
+    (yakuniy ball bilan mos bo'lishi uchun). Rag'bat (`source="reward"`) — har
+    chaqiruvda yangi event.
+    """
+
+    __tablename__ = "points_events"
+
+    seq: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    student_id: Mapped[str] = mapped_column(
+        String, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    date: Mapped[str] = mapped_column(String(10), nullable=False)  # "YYYY-MM-DD"
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)  # "journal" | "reward"
+    reason: Mapped[str] = mapped_column(String, default="", nullable=False)
+    badge_id: Mapped[str | None] = mapped_column(String, nullable=True)  # shu event bilan berilgan nishon
+
+    @property
+    def id(self) -> str:  # javobda "pe-1" ko'rinishidagi barqaror string id
+        return f"pe-{self.seq}"

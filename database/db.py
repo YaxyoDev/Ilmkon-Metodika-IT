@@ -58,9 +58,10 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    from database.seed import seed_if_empty
+    from database.seed import backfill_points_events_if_empty, seed_if_empty
 
     await seed_if_empty()
+    await backfill_points_events_if_empty()
 
 
 async def close_db() -> None:

@@ -6,3 +6,15 @@ ATTENDANCE_POINTS = {"keldi": 2, "kechikdi": 1, "kelmadi": 0}
 
 def cell_points(grade: int | None, attendance: str) -> int:
     return (GRADE_POINTS.get(grade, 0) if grade else 0) + ATTENDANCE_POINTS[attendance]
+
+
+def journal_reason(grade: int | None, attendance: str) -> str:
+    """Ball tarixi uchun o'qiladigan sabab matni (gamifikatsiya 1-band)."""
+    if grade:
+        base = f"Darsda «{grade}» baho"
+        return f"{base} (kechikdi)" if attendance == "kechikdi" else base
+    return {
+        "keldi": "Darsga keldi",
+        "kechikdi": "Darsga kechikdi",
+        "kelmadi": "Darsga kelmadi",
+    }[attendance]

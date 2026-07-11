@@ -15,6 +15,7 @@ from database.models import (
     JournalColumn,
     JournalEntry,
     Lesson,
+    PointsEvent,
     QuarterInfo,
     Student,
     Teacher,
@@ -28,7 +29,7 @@ from utils.lesson_template import (
     practice_for,
     theory_for,
 )
-from utils.points import cell_points
+from utils.points import cell_points, journal_reason
 from utils.security import hash_password
 
 # --- Hisoblar (spec 8.1) ---
@@ -174,4 +175,28 @@ async def seed_if_empty() -> None:
                         date=date, grade=grade_val, attendance=attendance,
                     ))
 
+        await db.commit()
+
+
+async def backfill_points_events_if_empty() -> None:
+    """Mavjud jurnal yozuvlaridan ball tarixini to'ldiradi (gamifikatsiya 1-band).
+
+    Idempotent: points_events jadvali bo'sh bo'lsagina ishlaydi. Bu eski bazalarda
+    (seed allaqachon bajarilgan) ham timeline/davriy reyting uchun tarixiy
+    "journal" event'larni yaratadi. Yangi ball o'zgarishlari keyin avtomatik
+    log qilinadi."""
+    async with AsyncSessionLocal() as db:
+        if await db.scalar(select(func.count(PointsEvent.seq))):
+            return  # allaqachon tarix bor
+
+        entries = (
+            await db.scalars(select(JournalEntry).order_by(JournalEntry.date))
+        ).all()
+        for e in entries:
+            pts = cell_points(e.grade, e.attendance)
+            if pts > 0:
+                db.add(PointsEvent(
+                    student_id=e.student_id, date=e.date, delta=pts,
+                    source="journal", reason=journal_reason(e.grade, e.attendance),
+                ))
         await db.commit()

@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 
-from database.models import ClassGroup, JournalColumn, JournalEntry, Student
+from database.models import ClassGroup, JournalColumn, JournalEntry, PointsEvent, Student
 from schemas import (
     JournalCellRequest,
     JournalCellResponse,
@@ -19,9 +19,46 @@ from utils.deps import (
     db_dependency,
     require_roles,
 )
-from utils.points import cell_points
+from utils.points import cell_points, journal_reason
 
 router = APIRouter(prefix="/api", tags=["journal"])
+
+STREAK_LEN = 5  # "streak" nishoni: shuncha dars ketma-ket "keldi" (gamifikatsiya 3-band)
+
+
+async def _auto_award_badges(db, student: Student, grade: int | None) -> str | None:
+    """Jurnal saqlanganda nishonlarni avtomatik beradi (gamifikatsiya 3-band).
+
+    Chaqirilishidan oldin joriy katak `db.flush()` bilan yozilgan bo'lishi kerak
+    (streak hisobi shu o'quvchining barcha yozuvlarini o'qiydi). Berilgan yangi
+    nishon id'sini qaytaradi (event'ning `badgeId` maydoniga yoziladi); bir
+    saqlashda ikki nishon tushsa birinchisi qaytadi, ikkalasi ham beriladi.
+    """
+    awarded: str | None = None
+
+    # star — birinchi marta «5» baho
+    if grade == 5 and "star" not in student.badges:
+        student.badges = student.badges + ["star"]
+        awarded = "star"
+
+    # streak — STREAK_LEN dars ketma-ket "keldi"
+    if "streak" not in student.badges:
+        attendances = (
+            await db.scalars(
+                select(JournalEntry.attendance)
+                .where(JournalEntry.student_id == student.id)
+                .order_by(JournalEntry.date)
+            )
+        ).all()
+        run = best = 0
+        for att in attendances:
+            run = run + 1 if att == "keldi" else 0
+            best = max(best, run)
+        if best >= STREAK_LEN:
+            student.badges = student.badges + ["streak"]
+            awarded = awarded or "streak"
+
+    return awarded
 
 
 @router.get("/journal", response_model=list[JournalEntryOut])
@@ -31,6 +68,25 @@ async def get_journal(
     class_id: str = Query(alias="classId"),
 ):
     entries = await db.scalars(select(JournalEntry).where(JournalEntry.class_id == class_id))
+    return entries.all()
+
+
+@router.get("/students/{student_id}/journal", response_model=list[JournalEntryOut])
+async def get_student_journal(
+    student_id: str,
+    db: db_dependency,
+    me: current_user_dependency,
+):
+    """O'quvchining barcha (sinfidan qat'i nazar) jurnal yozuvlari, sana bo'yicha
+    o'sish tartibida (gamifikatsiya 2-band). Sinf o'zgarsa ham tarix saqlanadi."""
+    student = await db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(404, "O'quvchi topilmadi")
+    entries = await db.scalars(
+        select(JournalEntry)
+        .where(JournalEntry.student_id == student_id)
+        .order_by(JournalEntry.date)
+    )
     return entries.all()
 
 
@@ -132,6 +188,39 @@ async def set_journal_cell(
             attendance=attendance,
         )
         db.add(entry)
+
+    # Nishonlarni avtomatik berish (3-band) — joriy katak yozilgach hisoblanadi
+    await db.flush()
+    awarded_badge = await _auto_award_badges(db, student, grade)
+
+    # Ball tarixi (1-band): har (student, date) uchun bitta "journal" event.
+    # Yakuniy ball bilan mos bo'lishi uchun event delta = katakning to'liq bali;
+    # ball 0 bo'lsa event o'chiriladi.
+    event = await db.scalar(
+        select(PointsEvent).where(
+            PointsEvent.student_id == body.student_id,
+            PointsEvent.date == body.date,
+            PointsEvent.source == "journal",
+        )
+    )
+    if new_pts > 0:
+        if event is None:
+            event = PointsEvent(
+                student_id=body.student_id,
+                date=body.date,
+                delta=new_pts,
+                source="journal",
+                reason=journal_reason(grade, attendance),
+                badge_id=awarded_badge,
+            )
+            db.add(event)
+        else:
+            event.delta = new_pts
+            event.reason = journal_reason(grade, attendance)
+            if awarded_badge:  # yangi nishon bo'lsa yozamiz, aks holda eskisi qoladi
+                event.badge_id = awarded_badge
+    elif event is not None:  # ball 0 ga tushdi — eski eventni o'chiramiz
+        await db.delete(event)
 
     await db.commit()
     await db.refresh(entry)

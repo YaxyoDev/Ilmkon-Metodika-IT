@@ -478,9 +478,73 @@ Katak qayta yozilsa eski ball ayirilib, yangisi qo‘shiladi (ball `0` dan pastg
 ```
 **Xatolar:** `404 "Sinf topilmadi"`, `404 "O'quvchi topilmadi"`, `403 "Bu sinfda baholash huquqingiz yo'q"`
 
+> **Qo‘shimcha (gamifikatsiya):** katak saqlanganda server avtomatik ravishda
+> (1) ball tarixiga «journal» yozuv qo‘shadi/yangilaydi, (2) nishonlarni tekshiradi —
+> birinchi «5» baho → `star`, 5 dars ketma-ket `keldi` → `streak`. Berilgan nishon
+> shu sana ball-tarix yozuvining `badgeId` maydonida ko‘rinadi.
+
 ---
 
-## 7. Tez ma’lumotnoma (jadval)
+## 7. Gamifikatsiya (ball tarixi, davriy reyting)
+
+### 🔒 GET `/api/students/{id}/points-history?limit=20`  *(hamma rol)*
+O‘quvchining so‘nggi ball o‘zgarishlari — **eng yangisi birinchi** (sana bo‘yicha
+kamayish tartibida). Profildagi «Ballar tarixi» timeline uchun.
+
+**Query:** `limit` (ixtiyoriy, default `20`, `1–200`)
+**Javob 200:**
+```json
+[
+  { "id": "pe-91", "studentId": "s-5a-1", "date": "2026-05-12",
+    "delta": 17, "source": "journal", "reason": "Darsda «5» baho", "badgeId": "star" },
+  { "id": "pe-42", "studentId": "s-5a-1", "date": "2026-05-10",
+    "delta": 10, "source": "reward", "reason": "Sinfdoshiga yordam berdi", "badgeId": "helper" }
+]
+```
+> `source`: `"journal"` (jurnal katagi) | `"reward"` (rag‘bat). `badgeId` — shu event
+> bilan berilgan nishon yoki `null`. Jurnal manbasida har (o‘quvchi, sana) uchun bitta
+> yozuv bo‘ladi (katak qayta yozilsa yangilanadi); rag‘bat har chaqiruvda alohida yozuv.
+> **Xato:** `404 "O'quvchi topilmadi"`.
+
+---
+
+### 🔒 GET `/api/students/{id}/journal`  *(hamma rol)*
+O‘quvchining **barcha** jurnal yozuvlari (sinfidan qat’i nazar), sana bo‘yicha o‘sish
+tartibida. Sinf o‘zgargan bo‘lsa ham to‘liq tarix qaytadi — statistika (davomat %,
+«5» soni, seriya) uzilmaydi.
+
+**Javob 200:** `JournalEntry[]` (`/api/journal` bilan bir xil shakl).
+**Xato:** `404 "O'quvchi topilmadi"`.
+
+---
+
+### 🔒 GET `/api/leaderboard?period=week|month|quarter|all&classId=c-5a`  *(hamma rol)*
+Davriy reyting. `points` — tanlangan davrdagi ball o‘zgarishlari yig‘indisi;
+`period=all` bo‘lsa o‘quvchining joriy umumiy bali.
+
+**Query:**
+- `period` (ixtiyoriy, default `all`): `week` (7 kun), `month` (30 kun), `quarter` (90 kun), `all`.
+- `classId` (ixtiyoriy): berilsa faqat shu sinf; berilmasa barcha o‘quvchilar.
+
+**Javob 200:** ball bo‘yicha kamayish tartibida, `position` 1 dan boshlanadi:
+```json
+[ { "studentId": "s-5a-1", "points": 42, "position": 1 },
+  { "studentId": "s-5a-4", "points": 30, "position": 2 } ]
+```
+
+---
+
+### `POST /api/students/{id}/points` — yangilangan
+Rag‘bat berish endpointi endi ixtiyoriy `reason` maydonini ham qabul qiladi va ball
+tarixiga `reward` yozuvini qo‘shadi:
+```json
+{ "points": 10, "badgeId": "star", "reason": "Darsdagi faolligi uchun" }
+```
+`reason` yuborilmasa `"Rag'bat"` ishlatiladi.
+
+---
+
+## 8. Tez ma’lumotnoma (jadval)
 
 | Metod | URL | Rol | Nima qiladi |
 |---|---|---|---|
@@ -508,16 +572,19 @@ Katak qayta yozilsa eski ball ayirilib, yangisi qo‘shiladi (ball `0` dan pastg
 | POST | `/api/students` | admin, teacher | Yangi o‘quvchi |
 | PATCH | `/api/students/{id}` | admin, teacher | O‘quvchini tahrirlash |
 | DELETE | `/api/students/{id}` | admin, teacher | O‘quvchini o‘chirish |
-| POST | `/api/students/{id}/points` | admin, teacher | Ball/nishon berish |
+| POST | `/api/students/{id}/points` | admin, teacher | Ball/nishon berish (+ tarixga yozadi) |
+| GET | `/api/students/{id}/points-history` | 🔒 | Ball tarixi (timeline) |
+| GET | `/api/students/{id}/journal` | 🔒 | O‘quvchining to‘liq jurnal tarixi |
 | GET | `/api/badges` | 🔓 | Nishonlar lug‘ati |
 | GET | `/api/journal?classId=` | 🔒 | Jurnal katakchalari |
 | GET | `/api/journal/columns?classId=` | 🔒 | Jurnal ustunlari |
 | POST | `/api/journal/columns` | admin/o‘z sinfi | «Dars o‘tish» ustuni |
-| PUT | `/api/journal/cell` | admin/o‘z sinfi | Baho/davomat (upsert) |
+| PUT | `/api/journal/cell` | admin/o‘z sinfi | Baho/davomat (upsert, + tarix/nishon) |
+| GET | `/api/leaderboard?period=&classId=` | 🔒 | Davriy reyting |
 
 ---
 
-## 8. Frontendda ulash namunasi
+## 9. Frontendda ulash namunasi
 
 ```ts
 const BASE = "http://localhost:8000";

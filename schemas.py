@@ -11,6 +11,8 @@ from pydantic.alias_generators import to_camel
 
 Attendance = Literal["keldi", "kelmadi", "kechikdi"]
 LessonStatus = Literal["ready", "draft"]
+PointsSource = Literal["journal", "reward"]
+LeaderboardPeriod = Literal["week", "month", "quarter", "all"]
 
 
 class CamelModel(BaseModel):
@@ -186,16 +188,43 @@ class StudentUpdate(CamelModel):
 
 
 class PointsRequest(CamelModel):
-    """Rag'batlantirish: points musbat/manfiy, natija max(0, ...) (spec 6.6)."""
+    """Rag'batlantirish: points musbat/manfiy, natija max(0, ...) (spec 6.6).
+
+    `reason` — o'qituvchi tanlagan sabab (ball tarixida ko'rsatiladi,
+    gamifikatsiya 1-band); yuborilmasa standart matn ishlatiladi.
+    """
 
     points: int
     badge_id: str | None = None
+    reason: str | None = None
 
 
 class BadgeDef(CamelModel):
     id: str
     name: str
     description: str
+
+
+# --- Gamifikatsiya (BACKEND_GAMIFICATION.md) ---
+
+class PointsEventOut(CamelModel):
+    """Ball tarixi yozuvi (1-band)."""
+
+    id: str
+    student_id: str
+    date: str  # "YYYY-MM-DD"
+    delta: int
+    source: PointsSource
+    reason: str = ""
+    badge_id: str | None = None
+
+
+class LeaderboardEntry(CamelModel):
+    """Davriy reyting qatori (5-band)."""
+
+    student_id: str
+    points: int
+    position: int
 
 
 # --- Jurnal (spec 7.6) ---

@@ -1,12 +1,20 @@
 """O'quvchilar CRUD, rag'bat ballari, nishonlar (spec 7.5, 6.6)."""
 
+from datetime import date as date_cls
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import delete, select
 
-from database.models import JournalEntry, Student
-from schemas import BadgeDef, PointsRequest, StudentCreate, StudentOut, StudentUpdate
+from database.models import JournalEntry, PointsEvent, Student
+from schemas import (
+    BadgeDef,
+    PointsEventOut,
+    PointsRequest,
+    StudentCreate,
+    StudentOut,
+    StudentUpdate,
+)
 from utils.badges import BADGE_DEFS
 from utils.deps import CurrentUser, current_user_dependency, db_dependency, require_roles
 
@@ -103,9 +111,39 @@ async def add_points(
         # JSON ustun mutatsiyani kuzatmaydi — yangi ro'yxat beriladi
         student.badges = student.badges + [body.badge_id]
 
+    # Ball tarixi (gamifikatsiya 1-band): har rag'bat alohida event
+    db.add(PointsEvent(
+        student_id=student_id,
+        date=date_cls.today().isoformat(),
+        delta=body.points,
+        source="reward",
+        reason=body.reason or "Rag'bat",
+        badge_id=body.badge_id,
+    ))
+
     await db.commit()
     await db.refresh(student)
     return student
+
+
+@router.get("/students/{student_id}/points-history", response_model=list[PointsEventOut])
+async def get_points_history(
+    student_id: str,
+    db: db_dependency,
+    me: current_user_dependency,
+    limit: int = Query(default=20, ge=1, le=200),
+):
+    """O'quvchining so'nggi ball o'zgarishlari — eng yangisi birinchi (1-band)."""
+    student = await db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(404, "O'quvchi topilmadi")
+    events = await db.scalars(
+        select(PointsEvent)
+        .where(PointsEvent.student_id == student_id)
+        .order_by(PointsEvent.date.desc(), PointsEvent.seq.desc())
+        .limit(limit)
+    )
+    return events.all()
 
 
 @router.get("/badges", response_model=list[BadgeDef])

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database.db import close_db, init_db
-from routers import auth, classes, journal, lessons, students, teachers
+from routers import auth, classes, journal, leaderboard, lessons, students, teachers
 
 
 @asynccontextmanager
@@ -25,7 +25,10 @@ app = FastAPI(title="MetodikaIT API", lifespan=lifespan)
 # CORS — dev'da Vite frontend (spec 3.5)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", 
+                   "https://metodika-it-frontend.vercel.app", 
+                   "https://ilmkon-metodika.uz", 
+                   "https://www.ilmkon-metodika.uz"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,3 +40,4 @@ app.include_router(classes.router)
 app.include_router(teachers.router)
 app.include_router(students.router)
 app.include_router(journal.router)
+app.include_router(leaderboard.router)
