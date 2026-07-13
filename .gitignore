@@ -10,6 +10,12 @@ __pycache__/
 
 .env
 
+# Shaxsiy izohlar (git'ga qo'shilmaydi)
+special.md
+
+API_REQUIREMENTS.md
+Frontend_full.md
+
 
 # Distribution / packaging
 .Python

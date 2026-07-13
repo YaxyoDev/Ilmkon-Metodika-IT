@@ -6,8 +6,10 @@ Ishga tushirish (dev):
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from database.db import close_db, init_db
 from routers import auth, classes, journal, leaderboard, lessons, students, teachers
@@ -33,6 +35,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Validatsiya (422) xatolarini frontend kutgan yagona shaklga keltiradi (spec 0-band):
+    body har doim {"detail": "<o'zbekcha matn>"} — FastAPI standarti bergan massiv emas."""
+    errors = exc.errors()
+    field = errors[0]["loc"][-1] if errors and errors[0].get("loc") else "ma'lumot"
+    return JSONResponse(
+        status_code=422,
+        content={"detail": f"Yuborilgan ma'lumot noto'g'ri: «{field}» maydonini tekshiring"},
+    )
+
 
 app.include_router(auth.router)
 app.include_router(lessons.router)

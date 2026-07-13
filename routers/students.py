@@ -4,10 +4,11 @@ from datetime import date as date_cls
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from database.models import JournalEntry, PointsEvent, Student
 from schemas import (
+    AchievementOut,
     BadgeDef,
     PointsEventOut,
     PointsRequest,
@@ -15,6 +16,7 @@ from schemas import (
     StudentOut,
     StudentUpdate,
 )
+from utils.achievements import compute_achievements
 from utils.badges import BADGE_DEFS
 from utils.deps import CurrentUser, current_user_dependency, db_dependency, require_roles
 
@@ -144,6 +146,35 @@ async def get_points_history(
         .limit(limit)
     )
     return events.all()
+
+
+@router.get("/students/{student_id}/achievements", response_model=list[AchievementOut])
+async def get_achievements(
+    student_id: str,
+    db: db_dependency,
+    me: current_user_dependency,
+):
+    """O'quvchining ochilgan yutuqlari (spec 6.6). Shartlar `utils/achievements.py`
+    da (frontend ro'yxatiga qarab moslashtiriladi)."""
+    student = await db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(404, "O'quvchi topilmadi")
+
+    entries = (
+        await db.scalars(
+            select(JournalEntry)
+            .where(JournalEntry.student_id == student_id)
+            .order_by(JournalEntry.date)
+        )
+    ).all()
+
+    # Umumiy reytingdagi o'rin (top-3 yutug'i uchun)
+    higher = await db.scalar(
+        select(func.count(Student.id)).where(Student.points > student.points)
+    )
+    rank = (higher or 0) + 1
+
+    return compute_achievements(entries, student.points, student.badges, rank)
 
 
 @router.get("/badges", response_model=list[BadgeDef])

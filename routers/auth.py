@@ -58,7 +58,8 @@ async def update_profile(body: ProfileUpdate, me: current_user_dependency, db: d
     if body.name.strip():
         obj.name = body.name
     if body.photo:
-        obj.photo = body.photo
+        # Frontend rasm o'chirilganda "none" yuboradi (spec 2.3) — bo'sh saqlanadi
+        obj.photo = "" if body.photo == "none" else body.photo
     if body.password:
         obj.password_hash = hash_password(body.password)
     if me.kind == "teacher":  # phone/email faqat teacher uchun ma'noli

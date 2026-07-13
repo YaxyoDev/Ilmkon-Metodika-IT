@@ -227,6 +227,13 @@ class LeaderboardEntry(CamelModel):
     position: int
 
 
+class AchievementOut(CamelModel):
+    """Yutuq (6.6). `unlockedAt` — ochilgan sana "YYYY-MM-DD"."""
+
+    id: str
+    unlocked_at: str
+
+
 # --- Jurnal (spec 7.6) ---
 
 class JournalEntryOut(CamelModel):
@@ -260,7 +267,7 @@ class JournalCellRequest(CamelModel):
     class_id: str
     student_id: str
     date: str
-    grade: int | None = Field(default=None, ge=2, le=5)
+    grade: int | None = Field(default=None, ge=1, le=5)  # frontend 1..5 yoki null (spec 1-band)
     attendance: Attendance | None = None
 
 
