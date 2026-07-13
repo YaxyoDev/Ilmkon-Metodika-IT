@@ -229,3 +229,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Local database
+metodika.db
+*.db
+
+# Frontend (alohida repo — bu backend repoga kirmasin)
+MetodikaIT-Frontend-main/
