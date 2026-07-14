@@ -87,11 +87,14 @@ async def init_db() -> None:
     from database.seed import (
         backfill_points_events_if_empty,
         ensure_default_admin,
+        reconcile_points_baseline,
         seed_if_empty,
     )
 
     await seed_if_empty()
     await backfill_points_events_if_empty()
+    # Boshlang'ich (event'siz) ballarni tarix bilan moslashtiradi (2–3-band).
+    await reconcile_points_baseline()
     # Standart admin (yaxyo) — baza allaqachon seed qilingan bo'lsa ham kafolatlanadi.
     await ensure_default_admin()
 

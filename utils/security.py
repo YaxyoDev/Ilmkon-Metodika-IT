@@ -12,7 +12,14 @@ from passlib.context import CryptContext
 
 load_dotenv()
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-maxfiy-kalit")
+# Production'da JWT_SECRET majburiy — aks holda repodagi default kalit bilan
+# istalgan odam o'ziga admin token yasay oladi (7.1-band). Dev'da default qoladi.
+JWT_SECRET = os.getenv("JWT_SECRET") or ""
+if not JWT_SECRET:
+    if os.getenv("ENV", "dev") == "prod":
+        raise RuntimeError("JWT_SECRET o'rnatilmagan — production'da majburiy")
+    JWT_SECRET = "dev-maxfiy-kalit"
+
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 TOKEN_TTL_HOURS = int(os.getenv("TOKEN_TTL_HOURS", "24"))
 

@@ -45,13 +45,17 @@ class LoginResponse(CamelModel):
 
 
 class ProfileUpdate(CamelModel):
-    """Hamma maydon ixtiyoriy; bo'sh string e'tiborga olinmaydi (spec 7.1)."""
+    """Yuborilmagan maydon o'zgarmaydi; yuborilgan bo'sh string maydonni tozalaydi
+    (name/password bundan mustasno — ular bo'sh bo'lishi mumkin emas).
 
-    name: str = ""
-    phone: str = ""
-    email: str = ""
-    photo: str = ""
-    password: str = ""
+    `None` default + `model_fields_set` "yuborilmadi" va "bo'sh yuborildi"ni
+    ajratadi (routers/auth.py:update_profile)."""
+
+    name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    photo: str | None = None
+    password: str | None = None
 
 
 # --- O'qituvchilar (spec 7.4) ---
@@ -194,7 +198,7 @@ class PointsRequest(CamelModel):
     gamifikatsiya 1-band); yuborilmasa standart matn ishlatiladi.
     """
 
-    points: int
+    points: int = Field(ge=-100, le=100)  # frontend max +50 yuboradi
     badge_id: str | None = None
     reason: str | None = None
 

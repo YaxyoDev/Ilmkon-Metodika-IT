@@ -50,23 +50,26 @@ async def logout(user: current_user_dependency):
 
 @router.patch("/profile", response_model=SessionUser)
 async def update_profile(body: ProfileUpdate, me: current_user_dependency, db: db_dependency):
-    """Faqat o'z profili. Bo'sh string kelgan maydon e'tiborga olinmaydi."""
+    """Faqat o'z profili. Yuborilmagan maydon o'zgarmaydi; yuborilgan bo'sh string
+    (phone/email/photo) maydonni tozalaydi. name/password bo'sh bo'lsa e'tiborsiz."""
     obj = await db.get(Teacher if me.kind == "teacher" else User, me.id)
     if obj is None:
         raise HTTPException(404, "Profil topilmadi")
 
-    if body.name.strip():
-        obj.name = body.name
-    if body.photo:
-        # Frontend rasm o'chirilganda "none" yuboradi (spec 2.3) — bo'sh saqlanadi
+    sent = body.model_fields_set
+
+    if "name" in sent and body.name and body.name.strip():
+        obj.name = body.name.strip()
+    if "photo" in sent and body.photo is not None:
+        # "none" — eski frontend workaround'i, muvofiqlik uchun qoladi
         obj.photo = "" if body.photo == "none" else body.photo
-    if body.password:
+    if "password" in sent and body.password:
         obj.password_hash = hash_password(body.password)
     if me.kind == "teacher":  # phone/email faqat teacher uchun ma'noli
-        if body.phone:
-            obj.phone = body.phone
-        if body.email:
-            obj.email = body.email
+        if "phone" in sent and body.phone is not None:
+            obj.phone = body.phone.strip()      # "" kelsa — tozalanadi
+        if "email" in sent and body.email is not None:
+            obj.email = body.email.strip()      # "" kelsa — tozalanadi
 
     await db.commit()
     await db.refresh(obj)

@@ -7,6 +7,8 @@ nechta), to'liq 176 darslik o'quv dasturi keyin qo'shiladi.
 Idempotent: users jadvali bo'sh bo'lmasa hech narsa qilinmaydi.
 """
 
+import os
+
 from sqlalchemy import func, select
 
 from database.db import AsyncSessionLocal
@@ -32,10 +34,14 @@ from utils.lesson_template import (
 from utils.points import cell_points, journal_reason
 from utils.security import hash_password
 
+# Standart admin (yaxyo) boshlang'ich paroli — production'da env'dan olinadi
+# (7.2-band: repoda ochiq parol turmasligi uchun). Qo'yilmasa dev default "1710".
+ADMIN_INITIAL_PASSWORD = os.getenv("ADMIN_INITIAL_PASSWORD", "1710")
+
 # --- Hisoblar (spec 8.1) ---
 
 USERS = [
-    dict(id="u-yaxyo", name="Yaxyo", login="yaxyo", password="1710",
+    dict(id="u-yaxyo", name="Yaxyo", login="yaxyo", password=ADMIN_INITIAL_PASSWORD,
          role="admin", title="Administrator"),
     dict(id="u-admin", name="Aziz Rahmonov", login="admin", password="admin",
          role="admin", title="Platforma administratori"),
@@ -94,6 +100,10 @@ SAMPLE_STUDENTS = {
 # --- Jurnal sanalari (spec 8.6) ---
 
 JOURNAL_DATES = ["2026-05-12", "2026-05-19", "2026-05-26", "2026-06-02"]
+
+# O'quv yili boshi — reconcile_points_baseline() shu sana bilan boshlang'ich
+# ball eventini yozadi. Davriy oynalarga (hafta/oy/chorak) tushmasligi kerak.
+BASELINE_DATE = "2025-09-01"
 
 
 def _make_lesson(grade: int, quarter: int, order: int, title: str) -> Lesson:
@@ -193,7 +203,7 @@ async def ensure_default_admin() -> None:
             return
         db.add(User(
             id="u-yaxyo", name="Yaxyo", login="yaxyo",
-            password_hash=hash_password("1710"),
+            password_hash=hash_password(ADMIN_INITIAL_PASSWORD),
             role="admin", title="Administrator", photo="",
         ))
         await db.commit()
@@ -219,5 +229,33 @@ async def backfill_points_events_if_empty() -> None:
                 db.add(PointsEvent(
                     student_id=e.student_id, date=e.date, delta=pts,
                     source="journal", reason=journal_reason(e.grade, e.attendance),
+                ))
+        await db.commit()
+
+
+async def reconcile_points_baseline() -> None:
+    """student.points va sum(PointsEvent.delta) orasidagi farqni bir martalik
+    "boshlang'ich ball" eventi bilan yopadi (gamifikatsiya 2–3-band).
+
+    Seed o'quvchilari event'siz boshlang'ich ball oladi; backfill esa faqat
+    jurnal katakchalaridan event tiklaydi — natijada davriy reyting va ball
+    tarixi student.points bilan mos kelmaydi. Bu funksiya farqni eski sana
+    (BASELINE_DATE) bilan "reward" event qilib yozadi.
+
+    Idempotent: birinchi ishga tushirishdan keyin farq 0 bo'ladi va boshqa
+    hech narsa yozilmaydi."""
+    async with AsyncSessionLocal() as db:
+        students = (await db.scalars(select(Student))).all()
+        rows = await db.execute(
+            select(PointsEvent.student_id, func.sum(PointsEvent.delta))
+            .group_by(PointsEvent.student_id)
+        )
+        sums = {sid: int(total or 0) for sid, total in rows.all()}
+        for s in students:
+            diff = s.points - sums.get(s.id, 0)
+            if diff:
+                db.add(PointsEvent(
+                    student_id=s.id, date=BASELINE_DATE, delta=diff,
+                    source="reward", reason="Boshlang'ich ball",
                 ))
         await db.commit()

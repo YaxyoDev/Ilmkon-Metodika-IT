@@ -10,11 +10,8 @@ __pycache__/
 
 .env
 
-# Shaxsiy izohlar (git'ga qo'shilmaydi)
-special.md
-
-API_REQUIREMENTS.md
-Frontend_full.md
+LOGIN_PAROLLAR.md
+backend_fix.md
 
 
 # Distribution / packaging
@@ -229,9 +226,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-# Local database
-metodika.db
-*.db
+
 
 # Frontend (alohida repo — bu backend repoga kirmasin)
 MetodikaIT-Frontend-main/

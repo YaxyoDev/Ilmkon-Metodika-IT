@@ -104,6 +104,9 @@ async def add_points(
     me: CurrentUser = Depends(require_roles("admin", "teacher")),
 ):
     """Rag'bat: points musbat/manfiy, natija max(0, ...); badge takrorsiz (spec 6.6)."""
+    if body.points == 0:
+        raise HTTPException(422, "Ball 0 bo'lishi mumkin emas")
+
     student = await db.get(Student, student_id)
     if student is None:
         raise HTTPException(404, "O'quvchi topilmadi")
@@ -126,6 +129,43 @@ async def add_points(
     await db.commit()
     await db.refresh(student)
     return student
+
+
+@router.delete("/points-events/{event_seq}", status_code=204)
+async def delete_points_event(
+    event_seq: int,
+    db: db_dependency,
+    me: CurrentUser = Depends(require_roles("admin", "teacher")),
+):
+    """Faqat "reward" eventni bekor qiladi: ball qaytariladi, event bilan
+    berilgan nishon (boshqa event'da takrorlanmagan bo'lsa) olib tashlanadi.
+    "journal" event'lar jurnal katakchasi orqali boshqariladi — bu yerda taqiq.
+
+    Frontend event id'ni "pe-{seq}" ko'rinishida oladi (models.py) — u yerda
+    "pe-" prefiksini kesib, faqat seq (int) yuboradi."""
+    event = await db.get(PointsEvent, event_seq)
+    if event is None:
+        raise HTTPException(404, "Ball yozuvi topilmadi")
+    if event.source != "reward":
+        raise HTTPException(400, "Jurnal balini jurnal katakchasi orqali o'zgartiring")
+
+    student = await db.get(Student, event.student_id)
+    if student:
+        student.points = max(0, student.points - event.delta)
+        if event.badge_id and event.badge_id in student.badges:
+            others = await db.scalar(
+                select(func.count(PointsEvent.seq)).where(
+                    PointsEvent.student_id == event.student_id,
+                    PointsEvent.badge_id == event.badge_id,
+                    PointsEvent.seq != event.seq,
+                )
+            )
+            if not others:
+                student.badges = [b for b in student.badges if b != event.badge_id]
+
+    await db.delete(event)
+    await db.commit()
+    return None
 
 
 @router.get("/students/{student_id}/points-history", response_model=list[PointsEventOut])

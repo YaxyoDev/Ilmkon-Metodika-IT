@@ -104,6 +104,53 @@ async def get_journal_columns(
     return columns.all()
 
 
+@router.delete("/journal/columns/{column_id}", status_code=204)
+async def delete_journal_column(
+    column_id: str,
+    db: db_dependency,
+    me: CurrentUser = Depends(require_roles("admin", "teacher")),
+):
+    """Ustun + shu sinf/sanadagi katakchalar o'chadi, ballar qaytariladi.
+
+    Admin — istalgan sinf, teacher — faqat o'z sinfi. Avtomatik berilgan
+    nishonlar (star/streak) qaytarib olinmaydi (ongli soddalashtirish)."""
+    column = await db.get(JournalColumn, column_id)
+    if column is None:
+        raise HTTPException(404, "Jurnal ustuni topilmadi")
+    klass = await db.get(ClassGroup, column.class_id)
+    assert_can_grade(me, klass)  # admin — istalgan sinf, teacher — faqat o'z sinfi
+
+    entries = (
+        await db.scalars(
+            select(JournalEntry).where(
+                JournalEntry.class_id == column.class_id,
+                JournalEntry.date == column.date,
+            )
+        )
+    ).all()
+
+    for e in entries:
+        pts = cell_points(e.grade, e.attendance)
+        if pts:
+            student = await db.get(Student, e.student_id)
+            if student:
+                student.points = max(0, student.points - pts)
+        event = await db.scalar(
+            select(PointsEvent).where(
+                PointsEvent.student_id == e.student_id,
+                PointsEvent.date == e.date,
+                PointsEvent.source == "journal",
+            )
+        )
+        if event:
+            await db.delete(event)
+        await db.delete(e)
+
+    await db.delete(column)
+    await db.commit()
+    return None
+
+
 @router.post("/journal/columns", response_model=JournalColumnOut, status_code=201)
 async def add_journal_column(
     body: JournalColumnCreate,
