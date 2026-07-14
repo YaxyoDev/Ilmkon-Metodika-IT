@@ -1,3 +1,4 @@
+a2wsgi==1.10.10
 aiosqlite==0.22.1
 alembic==1.18.5
 annotated-doc==0.0.4

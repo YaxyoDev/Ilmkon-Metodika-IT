@@ -35,6 +35,8 @@ from utils.security import hash_password
 # --- Hisoblar (spec 8.1) ---
 
 USERS = [
+    dict(id="u-yaxyo", name="Yaxyo", login="yaxyo", password="1710",
+         role="admin", title="Administrator"),
     dict(id="u-admin", name="Aziz Rahmonov", login="admin", password="admin",
          role="admin", title="Platforma administratori"),
     dict(id="u-rahbar", name="Nodira Alimova", login="rahbar", password="rahbar",
@@ -175,6 +177,25 @@ async def seed_if_empty() -> None:
                         date=date, grade=grade_val, attendance=attendance,
                     ))
 
+        await db.commit()
+
+
+async def ensure_default_admin() -> None:
+    """Standart admin hisobini (login: yaxyo) kafolatlaydi.
+
+    `seed_if_empty` faqat bo'sh bazada ishlaydi; production bazasi allaqachon
+    eski seed bilan to'lgan bo'lsa ham bu funksiya `yaxyo` hisobini qo'shadi
+    (agar hali yo'q bo'lsa). To'liq idempotent — mavjud bo'lsa hech narsa
+    qilmaydi, parolni qayta yozmaydi."""
+    async with AsyncSessionLocal() as db:
+        exists = await db.scalar(select(User).where(User.login == "yaxyo"))
+        if exists:
+            return
+        db.add(User(
+            id="u-yaxyo", name="Yaxyo", login="yaxyo",
+            password_hash=hash_password("1710"),
+            role="admin", title="Administrator", photo="",
+        ))
         await db.commit()
 
 

@@ -6,6 +6,7 @@ DATABASE_URL .env faylidan olinadi. Misollar:
 """
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import inspect, text
@@ -18,7 +19,12 @@ from sqlalchemy.orm import DeclarativeBase
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./metodika.db")
+# Default SQLite fayl MUTLAQ yo'l bilan beriladi (loyiha ildizi = shu faylning
+# ota-katalogining ota-katalogi). cPanel/Passenger ilovani boshqa ishchi
+# katalogdan (CWD) yuklashi mumkin — nisbiy "./metodika.db" bo'lsa har safar
+# BOSHQA joyda bo'sh baza yaratilib, "ma'lumot yo'q" holati kelib chiqadi.
+_DEFAULT_DB_PATH = (Path(__file__).resolve().parent.parent / "metodika.db").as_posix()
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{_DEFAULT_DB_PATH}")
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 
@@ -78,10 +84,16 @@ async def init_db() -> None:
         await _ensure_points_events_schema(conn)
         await conn.run_sync(Base.metadata.create_all)
 
-    from database.seed import backfill_points_events_if_empty, seed_if_empty
+    from database.seed import (
+        backfill_points_events_if_empty,
+        ensure_default_admin,
+        seed_if_empty,
+    )
 
     await seed_if_empty()
     await backfill_points_events_if_empty()
+    # Standart admin (yaxyo) — baza allaqachon seed qilingan bo'lsa ham kafolatlanadi.
+    await ensure_default_admin()
 
 
 async def close_db() -> None:
