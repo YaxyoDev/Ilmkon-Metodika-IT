@@ -4,6 +4,10 @@ Ishga tushirish (dev):
     uvicorn main:app --reload --port 8000
 """
 
+"""
+Kod yangilandi
+"""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
